@@ -1,0 +1,85 @@
+---
+        title: "Week 4 assignment of Practical Machine Learning"
+        author: "Raymond MF Ng"
+        output:
+          html_document:
+            toc: TRUE
+---
+
+# Init
+
+Import library and set random seed.
+
+```{r}
+library(caret)
+set.seed(1000)
+```
+
+# Read data from CSV
+
+Read data file and replace obviously error in data, for example \#DIV/0! , empty etc. Replace it with NA
+
+```{r}
+pml_raw <- read.csv("pml-training.csv", na.strings = c("NA", "", "#DIV/0!"))
+pml_forecast <- read.csv("pml-testing.csv", na.strings = c("NA", "", "#DIV/0!"))
+```
+
+# Remove data of no use
+
+It seems not make sense to use the user_name as one of the variable to predict the outcome, also random forest do not works if there are lots of repeat NA
+
+```{r}
+pml_raw <- subset(pml_raw, select = -user_name) 
+pml_forecast <- subset(pml_forecast, select = -user_name)
+```
+
+Calculate the ratio of NA for column and remove those mostly na, in this case we keep those column where 90% is not NA
+
+```{r}
+naCols <- colSums(data.matrix(!is.na(pml_raw))) / nrow(pml_raw) 
+pml_raw <- pml_raw[naCols > 0.1] 
+pml_forecast <- pml_forecast[naCols > 0.1]
+```
+
+Remove the column 1-5 which is not related too (X raw_timestamp_part_1 raw_timestamp_part_2 cvtd_timestamp new_window).
+
+```{r}
+pml_cleanedRaw <- pml_raw[, -c(1,2,3,4,5)] 
+pml_cleanedForecast <- pml_forecast[, -c(1,2,3,4,5)]
+```
+
+# The resulting columns are these
+
+```{r eval=TRUE, echo=TRUE}
+names(pml_cleanedRaw)
+```
+
+# Split train set and test set
+
+Split the data by 70%, we keep 30% for testing
+
+```{r}
+pml_cleanedRaw$classe <- as.factor(pml_cleanedRaw$classe) 
+inTrain <- createDataPartition(y = pml_cleanedRaw$classe, p = 0.7)[[1]] 
+pml_train <- pml_cleanedRaw[inTrain, ] 
+pml_test <- pml_cleanedRaw[-inTrain, ] 
+
+modForest <- train(classe ~ ., data=pml_train, method = "rf")
+```
+
+# Watch the variables
+
+All variables have contribute something to the predicition
+
+```{r fig-margin, fig.margin=TRUE}
+plot(varImp(modForest))
+```
+
+# Run model with test set to predict output
+
+The confusion matrix have quite good prediction result with sensitivity and specificity both above 95%
+
+```{r eval=TRUE, echo=TRUE}
+predictForest <- predict(modForest, newdata=pml_test)
+confusionMatrix(pml_test$classe, predictForest)
+```
